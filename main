@@ -42,7 +42,7 @@
     label{font-weight:600;font-size:.95rem;opacity:.95}
     select, button, input[type="text"], input[type="range"], .toggle{
       appearance:none;border:none;border-radius:10px;padding:10px 12px;
-      background: rgba(255,255,255,.03); color:#e6eef8; outline:0; font-size:0.98rem;
+      background: rgba(255,255,255,.03); color:#999999; outline:0; font-size:0.98rem;
       border:1px solid rgba(255,255,255,.03); transition:.14s;
     }
     button{cursor:pointer; font-weight:700; letter-spacing:.2px;}
