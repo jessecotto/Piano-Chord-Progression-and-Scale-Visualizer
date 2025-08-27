@@ -145,7 +145,6 @@
 <body>
   <div class="container">
     <h1>Piano Chord & Scale Visualizer</h1>
-    <div class="sub">Production-ready: SoundFont piano (MusyngKite). Visuals preserved.</div>
 
     <div id="audioNotice" class="audio-notice">
       <div id="audioNoticeText">Enable audio (required to hear sounds)</div>
