@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Piano Chord & Scale Visualizer — SoundFont</title>
+
+  <!-- SoundFont player with fallback -->
+  <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.15.7/dist/soundfont-player.min.js"></script>
+
+  <style>
+    :root{
+      --white-key-w: 54px;
+      --white-key-h: 280px;
+      --black-key-w: 36px;
+      --black-key-h: 182px;
+      --piano-padding: 8px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background: linear-gradient(180deg,#0f1724 0%, #0b1220 60%);
+      color:#e6eef8; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      min-height:100vh;
+      -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    .container{max-width:1240px;margin:26px auto;padding:22px}
+    h1{margin:0 0 10px;font-size:2.2rem;font-weight:800;letter-spacing:.2px;color:#f8fafc}
+    .sub{opacity:.9;margin-bottom:14px;color:#cfe8ff}
+    .glass{
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+      border:1px solid rgba(255,255,255,0.04);
+      backdrop-filter: blur(8px);
+      border-radius:14px;
+      padding:16px;
+      box-shadow: 0 10px 30px rgba(2,6,23,.6);
+      margin-bottom:18px;
+    }
+
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+    .group{display:flex;flex-direction:column;gap:6px;min-width:150px}
+    label{font-weight:600;font-size:.95rem;opacity:.95}
+    select, button, input[type="text"], input[type="range"], .toggle{
+      appearance:none;border:none;border-radius:10px;padding:10px 12px;
+      background: rgba(255,255,255,.03); color:#e6eef8; outline:0; font-size:0.98rem;
+      border:1px solid rgba(255,255,255,.03); transition:.14s;
+    }
+    button{cursor:pointer; font-weight:700; letter-spacing:.2px;}
+    .btn-ok{background: linear-gradient(90deg,#22c1c3,#6ee7b7); color:#062023; box-shadow: 0 8px 22px rgba(57,230,179,.12);}    
+    .btn-ghost{background: rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.04)}
+    .btn-danger{background: linear-gradient(90deg,#ff6b6b,#ff7a88); color:#1b0b0b; box-shadow: 0 8px 22px rgba(255,107,107,.08)}
+    .btn-ok:hover{transform:translateY(-2px)}
+    .btn-danger:hover{transform:translateY(-2px)}
+    .btn-ghost:hover{background:rgba(255,255,255,.04)}
+
+    .audio-notice{display:flex;justify-content:space-between;align-items:center;gap:12px;background: linear-gradient(90deg,#2b2f4a,#1b2336); border:1px solid rgba(255,255,255,.03); color:#bfe9ff;border-radius:12px; padding:10px 12px; margin-bottom:12px}
+    .audio-notice.hidden{display:none}
+
+    .tabbar{display:flex;gap:6px;background:rgba(255,255,255,.02);padding:6px;border-radius:12px;margin-bottom:10px}
+    .tab{flex:1;padding:10px;border-radius:8px;background:transparent;border:0;color:rgba(255,255,255,.8);cursor:pointer;font-weight:700}
+    .tab.active{background: linear-gradient(90deg,#22c1c3,#6ee7b7); color:#052025; box-shadow:0 8px 20px rgba(34,193,195,.08)}
+
+    /* Piano */
+    .piano-wrap{display:flex;justify-content:center;margin:18px 0;padding:var(--piano-padding);background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;overflow:auto}
+    .piano{position:relative; height: calc(var(--white-key-h)); display:inline-block; padding-bottom:6px; min-width:calc(var(--white-key-w) * 14 + 40px);}
+
+    .key{position:relative; user-select:none; display:inline-flex; align-items:flex-end; justify-content:center; font-size:.75rem; font-weight:700; padding-bottom:8px; transition:all .08s ease}
+    .key.white{
+      width:var(--white-key-w); height:var(--white-key-h);
+      background: linear-gradient(180deg,#ffffff,#f3f6fb 70%);
+      color:#111; border:1px solid #cfd9e6; border-radius:6px 6px 8px 8px;
+      margin-right:0; box-shadow: inset 0 -6px 10px rgba(0,0,0,0.03);
+      display:inline-flex; align-items:flex-end; justify-content:center;
+    }
+    .key.white.pressed{background: linear-gradient(180deg,#e0f7ff,#bbecff); color:#072033; box-shadow: 0 6px 18px rgba(34,193,195,.12)}
+    .key.black{
+      position:absolute; width:var(--black-key-w); height:var(--black-key-h);
+      background: linear-gradient(180deg,#0b0f14,#1b2128); color:#fff; border-radius:6px; z-index:12;
+      top:0; box-shadow: 0 10px 20px rgba(2,6,23,.6), inset 0 -6px 10px rgba(0,0,0,.6);
+      border:1px solid rgba(255,255,255,.03);
+      display:flex; align-items:flex-end; justify-content:center;
+    }
+    .key.black.pressed{background: linear-gradient(180deg,#0f67ff,#0747a6); box-shadow: 0 6px 26px rgba(11,103,255,.28)}
+
+    /* scale highlights */
+    .key.scale-root{outline:3px solid #ff7a7a; outline-offset:-4px}
+    .key.scale-third{outline:3px solid #b57cfb; outline-offset:-4px}
+    .key.scale-fifth{outline:3px solid #ffd27a; outline-offset:-4px}
+    .key.scale-note{outline:2px dashed #6ee7b7; outline-offset:-4px}
+    .key.playing{box-shadow:0 0 20px rgba(255,255,255,.9)}
+
+    .pillbar{display:flex;gap:10px;flex-wrap:wrap}
+    .pill{background: rgba(255,255,255,.03); padding:9px 12px; border-radius:999px; display:flex; gap:8px; align-items:center; font-weight:700}
+    .pill.playing{background:linear-gradient(90deg,#22c1c3,#6ee7b7); color:#062023; transform:scale(1.04)}
+    .pill .x{background:#ff6b6b;border:0;color:#fff;width:20px;height:20px;border-radius:50%;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+
+    .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .status{min-height:28px; text-align:center; opacity:.95; margin-top:8px}
+    
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #6ee7b7;
+      animation: spin 1s ease-in-out infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .debug-panel {
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 14px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .debug-entry {
+      margin-bottom: 5px;
+      padding: 5px;
+      border-left: 3px solid #6ee7b7;
+    }
+    
+    .debug-error {
+      border-left-color: #ff6b6b;
+      color: #ff6b6b;
+    }
+    
+    .debug-warning {
+      border-left-color: #ffd27a;
+      color: #ffd27a;
+    }
+
+    @media(max-width:800px){ .piano{transform:scale(.9); transform-origin:center top} }
+    @media(max-width:520px){ .row{flex-direction:column;align-items:stretch} .group{min-width:unset}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Piano Chord & Scale Visualizer</h1>
+    <div class="sub">Production-ready: SoundFont piano (MusyngKite). Visuals preserved.</div>
+
+    <div id="audioNotice" class="audio-notice">
+      <div id="audioNoticeText">Enable audio (required to hear sounds)</div>
+      <div style="display:flex;gap:8px">
+        <button id="btnEnableAudio" class="btn-ok">Enable Audio</button>
+        <button id="btnTest" class="btn-ghost" disabled>Test Sound</button>
+      </div>
+    </div>
+
+    <div class="glass">
+      <div class="tabbar">
+        <button class="tab active" data-tab="chords">Chords</button>
+        <button class="tab" data-tab="scales">Scales</button>
+      </div>
+
+      <div id="tab-chords" class="tabpane active">
+        <div class="row">
+          <div class="group"><label for="rootNote">Root Note</label>
+            <select id="rootNote"><option>C</option><option>C#</option><option>D</option><option>D#</option><option>E</option><option>F</option><option>F#</option><option>G</option><option>G#</option><option>A</option><option>A#</option><option>B</option></select>
+          </div>
+          <div class="group"><label for="chordType">Chord Type</label>
+            <select id="chordType"><option value="major">Major</option><option value="minor">Minor</option><option value="diminished">Diminished</option><option value="augmented">Augmented</option><option value="sus2">Sus2</option><option value="sus4">Sus4</option><option value="major7">Major7</option><option value="minor7">Minor7</option><option value="dominant7">7</option></select>
+          </div>
+          <div class="group"><label>&nbsp;</label><button id="btnAdd" class="btn-ok">Add to Progression</button></div>
+          <div class="group"><label>Import (comma separated)</label>
+            <div style="display:flex;gap:8px"><input id="importInput" type="text" placeholder="e.g. Cmaj7, Fm, G7"><button id="btnImport" class="btn-ghost">Import</button></div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px" id="progressionContainer">
+          <div class="pillbar" id="progressionBar"><div class="pill" data-empty="1">No chords yet — add some!</div></div>
+        </div>
+
+        <div class="row" style="margin-top:12px">
+          <div class="controls">
+            <button id="btnPlayStop" class="btn-ok">Play Progression</button>
+            <button id="btnPause" class="btn-ghost" disabled>Pause</button>
+            <button id="btnClear" class="btn-danger">Clear All</button>
+            <label style="display:flex;align-items:center;gap:8px"><span>BPM</span><input id="bpm" type="range" min="40" max="200" value="92"><span id="bpmLabel">92</span></label>
+            <label style="display:flex;align-items:center;gap:8px"><span>Beats</span><input id="beats" type="range" min="1" max="8" value="2"><span id="beatsLabel">2</span></label>
+            <label style="display:flex;align-items:center;gap:8px"><input id="loop" type="checkbox"> Loop</label>
+          </div>
+        </div>
+
+        <div id="status" class="status"></div>
+      </div>
+
+      <div id="tab-scales" class="tabpane">
+        <div class="row">
+          <div class="group"><label for="scaleRoot">Scale Root</label>
+            <select id="scaleRoot"><option>C</option><option>C#</option><option>D</option><option>D#</option><option>E</option><option>F</option><option>F#</option><option>G</option><option>G#</option><option>A</option><option>A#</option><option>B</option></select>
+          </div>
+          <div class="group"><label for="scaleType">Scale Type</label>
+            <select id="scaleType"><option value="major">Major</option><option value="natural_minor">Natural Minor</option><option value="pentatonic_major">Pentatonic Major</option><option value="pentatonic_minor">Pentatonic Minor</option></select>
+          </div>
+          <div class="group"><label>&nbsp;</label><button id="btnPlayScale" class="btn-ghost">Play Scale</button></div>
+        </div>
+        <div id="degreePanel" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <div class="piano-wrap">
+      <div id="piano" class="piano" aria-hidden="false"></div>
+    </div>
+    
+    <div class="debug-panel" id="debugPanel">
+      <div class="debug-entry">Debug console initialized. Click "Enable Audio" to start.</div>
+    </div>
+  </div>
+<footer style="text-align: center; margin-top: 20px; opacity: 0.7; font-size: 0.9rem;">
+    Created by <strong>Jesse Cotto</strong>
+</footer>
+
+<script>
+(() => {
+  // --- constants
+  const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const WHITE = ['C','D','E','F','G','A','B'];
+  const BLACK = ['C#','D#','F#','G#','A#'];
+  const CHORD_FORMULAS = {
+    major:[0,4,7], minor:[0,3,7], diminished:[0,3,6], augmented:[0,4,8],
+    sus2:[0,2,7], sus4:[0,5,7], major7:[0,4,7,11], minor7:[0,3,7,10], dominant7:[0,4,7,10]
+  };
+
+  // --- elements
+  const $ = id => document.getElementById(id);
+  const el = {
+    piano: $('piano'),
+    btnEnableAudio: $('btnEnableAudio'),
+    btnTest: $('btnTest'),
+    btnAdd: $('btnAdd'),
+    btnImport: $('btnImport'),
+    importInput: $('importInput'),
+    progressionBar: $('progressionBar'),
+    btnPlayStop: $('btnPlayStop'),
+    btnPause: $('btnPause'),
+    btnClear: $('btnClear'),
+    bpm: $('bpm'),
+    bpmLabel: $('bpmLabel'),
+    beats: $('beats'),
+    beatsLabel: $('beatsLabel'),
+    loop: $('loop'),
+    status: $('status'),
+    tabs: document.querySelectorAll('.tab'),
+    tabChords: $('tab-chords'),
+    tabScales: $('tab-scales'),
+    rootNote: $('rootNote'),
+    chordType: $('chordType'),
+    scaleRoot: $('scaleRoot'),
+    scaleType: $('scaleType'),
+    btnPlayScale: $('btnPlayScale'),
+    degreePanel: $('degreePanel'),
+    audioNotice: $('audioNotice'),
+    audioNoticeText: $('audioNoticeText'),
+    debugPanel: $('debugPanel')
+  };
+
+  // --- state
+  const state = {
+    startOctave: 3,
+    octaves: 3,
+    keys: {}, // noteOct -> element
+    audioReady: false,
+    piano: null,         // SoundFont instrument object
+    ctx: null,           // AudioContext
+    masterGain: null,
+    progression: [],
+    isPlaying: false,
+    isPaused: false,
+    idx: 0,
+    timer: null,
+    pendingAction: null,
+    audioLoading: false,
+    soundfontLoaded: false,
+    usingWebAudio: false
+  };
+
+  // --- debug utils
+  function debugLog(message, type = '') {
+    const entry = document.createElement('div');
+    entry.className = 'debug-entry' + (type ? ` debug-${type}` : '');
+    entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    el.debugPanel.appendChild(entry);
+    el.debugPanel.scrollTop = el.debugPanel.scrollHeight;
+    console.log(`[PianoDebug] ${message}`);
+  }
+
+  function debugError(message) {
+    debugLog(message, 'error');
+    console.error(`[PianoDebug] ${message}`);
+  }
+
+  function debugWarning(message) {
+    debugLog(message, 'warning');
+    console.warn(`[PianoDebug] ${message}`);
+  }
+
+  // --- utils
+  function showStatus(msg, type='') {
+    el.status.textContent = msg || '';
+    el.status.className = 'status' + (type?(' '+type):'');
+  }
+  
+  function setAudioLoading(loading) {
+    state.audioLoading = loading;
+    if (loading) {
+      el.audioNoticeText.innerHTML = 'Loading SoundFont piano <span class="loading-spinner"></span>';
+      el.btnEnableAudio.disabled = true;
+      el.btnTest.disabled = true;
+      debugLog("Audio loading started...");
+    } else {
+      el.audioNoticeText.textContent = 'Enable audio (required to hear sounds)';
+      el.btnEnableAudio.disabled = false;
+    }
+  }
+
+  // --- build piano
+  function buildPiano(){
+    el.piano.innerHTML = '';
+    state.keys = {};
+    // create white keys sequentially
+    for(let oct=state.startOctave; oct<state.startOctave+state.octaves; oct++){
+      for(let i=0;i<WHITE.length;i++){
+        const note = WHITE[i] + oct;
+        const k = document.createElement('div');
+        k.className = 'key white';
+        k.dataset.note = note;
+        k.textContent = WHITE[i] + oct;
+        el.piano.appendChild(k);
+        state.keys[note] = k;
+      }
+    }
+
+    // position black keys after layout
+    requestAnimationFrame(() => positionBlackKeys());
+    
+    // interactions - pointer events for mouse + touch
+    el.piano.addEventListener('pointerdown', async (ev) => {
+      const key = ev.target.closest('.key');
+      if(!key) return;
+      ev.preventDefault();
+      pressKeyVisual(key);
+      // ensure audio on user gesture
+      if(!state.audioReady && !state.audioLoading){
+        // start audio immediately (browser trusts this user gesture)
+        await ensureAudio();
+      }
+      if(state.audioReady){
+        try {
+          // play with short release
+          playNote(key.dataset.note, 0.6);
+        } catch(e){ 
+          debugError(`Error playing note: ${e.message}`);
+          console.warn(e); 
+        }
+      }
+    });
+  }
+
+  function positionBlackKeys(){
+    Array.from(el.piano.querySelectorAll('.key.black')).forEach(n => n.remove());
+    const whiteNodes = Array.from(el.piano.querySelectorAll('.key.white'));
+    if(whiteNodes.length === 0) return;
+    const whiteRect = whiteNodes[0].getBoundingClientRect();
+    const whiteW = whiteRect.width || parseInt(getComputedStyle(document.documentElement).getPropertyValue('--white-key-w')) || 54;
+    const blackW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--black-key-w')) || 36;
+
+    for(let oct=state.startOctave; oct<state.startOctave+state.octaves; oct++){
+      const baseIndex = (oct - state.startOctave)*7;
+      const map = {'C#':0,'D#':1,'F#':3,'G#':4,'A#':5};
+      for(const bn of BLACK){
+        const leftIdx = baseIndex + map[bn];
+        const leftNode = whiteNodes[leftIdx];
+        const rightNode = whiteNodes[leftIdx+1];
+        if(!leftNode || !rightNode) continue;
+        const leftRect = leftNode.getBoundingClientRect();
+        const rightRect = rightNode.getBoundingClientRect();
+        const center = (leftRect.left + leftRect.width/2 + rightRect.left + rightRect.width/2)/2;
+        const pianoRect = el.piano.getBoundingClientRect();
+        const left = center - pianoRect.left - (blackW/2);
+        const note = bn + oct;
+        const k = document.createElement('div');
+        k.className = 'key black';
+        k.dataset.note = note;
+        k.textContent = bn + oct;
+        k.style.left = `${Math.round(left)}px`;
+        el.piano.appendChild(k);
+        state.keys[note] = k;
+      }
+    }
+  }
+
+  function pressKeyVisual(k){
+    if(!k) return;
+    k.classList.add('pressed');
+    setTimeout(()=>k.classList.remove('pressed'), 180);
+  }
+
+  // --- highlighting
+  function clearHighlights(){
+    Object.values(state.keys).forEach(k => {
+      if(k) k.classList.remove('scale-root','scale-third','scale-fifth','scale-note','playing');
+    });
+  }
+  function highlightNotes(notes){
+    clearHighlights();
+    for(let oct=state.startOctave; oct<state.startOctave+state.octaves; oct++){
+      notes.forEach((n, idx) => {
+        const id = n + oct;
+        const k = state.keys[id];
+        if(!k) return;
+        if(idx===0) k.classList.add('scale-root');
+        else if(idx===2) k.classList.add('scale-third');
+        else if(idx===4) k.classList.add('scale-fifth');
+        else k.classList.add('scale-note');
+      });
+    }
+  }
+
+  // --- audio init (SoundFont)
+  async function ensureAudio(onReady){
+    if(state.audioReady){ 
+      debugLog("Audio already ready");
+      if(onReady) onReady(); 
+      return; 
+    }
+    if(state.audioLoading) {
+      debugLog("Audio already loading");
+      return;
+    }
+    
+    try{
+      setAudioLoading(true);
+      debugLog("Creating AudioContext...");
+      
+      // Create AudioContext on a user gesture
+      state.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      debugLog(`AudioContext created: ${state.ctx.state}`);
+      
+      // Check if context is suspended (common in browsers)
+      if (state.ctx.state === 'suspended') {
+        debugWarning("AudioContext is suspended - will resume on user gesture");
+        await state.ctx.resume();
+        debugLog(`AudioContext resumed: ${state.ctx.state}`);
+      }
+
+      // Check if Soundfont is available
+      if (typeof Soundfont === 'undefined') {
+        debugWarning("Soundfont library not loaded, using Web Audio API fallback");
+        state.soundfontLoaded = false;
+        state.usingWebAudio = true;
+      } else {
+        debugLog("Loading SoundFont instrument 'acoustic_grand_piano'...");
+        
+        // Load SoundFont instrument (MusyngKite - realistic acoustic grand)
+        // This resolves when sample buffers are ready.
+        try {
+          state.piano = await Soundfont.instrument(state.ctx, 'acoustic_grand_piano', {
+            soundfont: 'MusyngKite',
+            nameToUrl: (name, soundfont, format) => {
+              // Use a different CDN for SoundFont files
+              const baseUrl = 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/';
+              return `${baseUrl}${name}-${format}.js`;
+            }
+          });
+          state.soundfontLoaded = true;
+          debugLog("SoundFont instrument loaded successfully");
+        } catch (sfError) {
+          debugError(`SoundFont loading failed: ${sfError.message}`);
+          console.error('SoundFont error:', sfError);
+          state.soundfontLoaded = false;
+          state.usingWebAudio = true;
+        }
+      }
+
+      // Success
+      state.audioReady = true;
+      state.audioLoading = false;
+      el.btnEnableAudio.disabled = true;
+      el.btnTest.disabled = false;
+      if(el.audioNotice) el.audioNotice.classList.add('hidden');
+      showStatus(state.soundfontLoaded ? 'Audio enabled (SoundFont: MusyngKite)' : 'Audio enabled (Web Audio fallback)');
+      debugLog("Audio system fully initialized");
+      
+      if(onReady) onReady();
+      if(state.pendingAction){
+        const fn = state.pendingAction;
+        state.pendingAction = null;
+        fn();
+      }
+    } catch(err){
+      console.error('Audio initialization failed', err);
+      debugError(`Audio initialization failed: ${err.message}`);
+      setAudioLoading(false);
+      showStatus('Unable to load audio — using fallback mode.', 'error');
+      
+      // Fallback: try to initialize with just Web Audio
+      try {
+        state.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        state.audioReady = true;
+        state.usingWebAudio = true;
+        el.btnEnableAudio.disabled = true;
+        el.btnTest.disabled = false;
+        if(el.audioNotice) el.audioNotice.classList.add('hidden');
+        debugLog("Web Audio fallback initialized successfully");
+      } catch (fallbackErr) {
+        debugError(`Web Audio fallback also failed: ${fallbackErr.message}`);
+      }
+    }
+  }
+
+  // Simple Web Audio fallback for generating tones
+  function playWebAudioTone(note, duration = 0.6, gain = 0.6) {
+    if (!state.ctx) return;
+    
+    // Map note to frequency (A4 = 440Hz)
+    const noteToFreq = {
+      'C': 261.63, 'C#': 277.18, 'D': 293.66, 'D#': 311.13,
+      'E': 329.63, 'F': 349.23, 'F#': 369.99, 'G': 392.00,
+      'G#': 415.30, 'A': 440.00, 'A#': 466.16, 'B': 493.88
+    };
+    
+    // Parse note (e.g., "C4")
+    const noteName = note.slice(0, -1);
+    const octave = parseInt(note.slice(-1));
+    const baseFreq = noteToFreq[noteName];
+    const frequency = baseFreq * Math.pow(2, octave - 4);
+    
+    // Create oscillator
+    const oscillator = state.ctx.createOscillator();
+    const volume = state.ctx.createGain();
+    
+    oscillator.type = 'sine';
+    oscillator.frequency.value = frequency;
+    volume.gain.value = gain;
+    
+    oscillator.connect(volume);
+    volume.connect(state.ctx.destination);
+    
+    // Schedule playback
+    const now = state.ctx.currentTime;
+    oscillator.start(now);
+    volume.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    oscillator.stop(now + duration);
+    
+    // Visual feedback
+    const key = state.keys[note];
+    if (key) {
+      key.classList.add('pressed');
+      setTimeout(() => key.classList.remove('pressed'), duration * 1000);
+    }
+    
+    return oscillator;
+  }
+
+  // helper to play single note
+  function playNote(note, duration = 0.6, gain = 0.6){
+    if(!state.audioReady || !state.ctx) {
+      debugWarning(`Cannot play note ${note}: audio not ready`);
+      return;
+    }
+    
+    // Check if context is suspended (can happen after tab switching)
+    if (state.ctx.state === 'suspended') {
+      debugWarning("AudioContext suspended, attempting to resume...");
+      state.ctx.resume().then(() => {
+        debugLog("AudioContext resumed, retrying note play");
+        playNote(note, duration, gain);
+      }).catch(err => {
+        debugError(`Failed to resume AudioContext: ${err.message}`);
+      });
+      return;
+    }
+    
+    try {
+      debugLog(`Playing note: ${note}`);
+      
+      if (state.soundfontLoaded && state.piano) {
+        // Use SoundFont if available
+        const audioNode = state.piano.play(note, state.ctx.currentTime, { 
+          duration: duration, 
+          gain: gain 
+        });
+        
+        // Visual feedback
+        const key = state.keys[note];
+        if (key) {
+          key.classList.add('pressed');
+          setTimeout(() => key.classList.remove('pressed'), duration * 1000);
+        }
+        
+        return audioNode;
+      } else {
+        // Fallback to Web Audio
+        return playWebAudioTone(note, duration, gain);
+      }
+    } catch (e){
+      debugError(`Error playing note ${note}: ${e.message}`);
+      console.warn('playNote error', e);
+      
+      // Try fallback if SoundFont fails
+      if (state.soundfontLoaded) {
+        debugLog("Trying Web Audio fallback after SoundFont error");
+        return playWebAudioTone(note, duration, gain);
+      }
+    }
+  }
+
+  // helper to play multiple notes (chord)
+  function playChord(notes, duration, gain = 0.6){
+    if(!Array.isArray(notes)) notes = [notes];
+    debugLog(`Playing chord: ${notes.join(', ')}`);
+    notes.forEach(n => playNote(n, duration, gain));
+  }
+
+  // test sound
+  el.btnTest.addEventListener('click', async ()=>{
+    if(!state.audioReady){
+      debugLog("Audio not ready, queuing test sound");
+      state.pendingAction = ()=> {
+        try { playChord(['C4','E4','G4'], 0.6); } catch(e){ 
+          debugError(`Test sound failed: ${e.message}`);
+          console.warn(e); 
+        }
+      };
+      await ensureAudio();
+      return;
+    }
+    playChord(['C4','E4','G4'], 0.6);
+  });
+  
+  el.btnEnableAudio.addEventListener('click', async ()=> { 
+    el.btnEnableAudio.disabled = true;
+    debugLog("User clicked Enable Audio button");
+    await ensureAudio(() => {
+      showStatus('Audio enabled successfully');
+      debugLog("Audio enabled successfully via button click");
+    });
+  });
+
+  // --- chord helpers
+  function idxOf(note){ return NOTE_NAMES.indexOf(note); }
+  function chordNotes(root, type){
+    const ri = idxOf(root);
+    if(ri < 0) return [];
+    const f = CHORD_FORMULAS[type] || CHORD_FORMULAS['major'];
+    return f.map(semi => NOTE_NAMES[(ri + semi) % 12]);
+  }
+
+  // --- progression UI
+  function refreshProgression(){
+    if(state.progression.length===0){
+      el.progressionBar.innerHTML = '<div class="pill" data-empty="1">No chords yet — add some!</div>';
+      return;
+    }
+    el.progressionBar.innerHTML = state.progression.map((c,i)=>{
+      return `<div class="pill" data-i="${i}"><span style="margin-right:8px">${c.name}</span><button class="x" data-i="${i}" title="Remove">×</button></div>`;
+    }).join('');
+    // attach remove handlers
+    Array.from(el.progressionBar.querySelectorAll('.x')).forEach(b=>{
+      b.addEventListener('click', (ev)=>{
+        ev.stopPropagation();
+        const i = Number(ev.currentTarget.dataset.i);
+        state.progression.splice(i,1);
+        if(state.idx>i) state.idx = Math.max(0, state.idx-1);
+        refreshProgression();
+      });
+    });
+    // clicking a pill jumps to that chord
+    Array.from(el.progressionBar.querySelectorAll('.pill')).forEach(p=>{
+      p.addEventListener('click', (ev)=>{
+        const container = ev.currentTarget;
+        const index = container.dataset.i;
+        if(index !== undefined) {
+          const i = Number(index);
+          Array.from(el.progressionBar.querySelectorAll('.pill')).forEach(x=>x.classList.remove('playing'));
+          container.classList.add('playing');
+          showStatus(`Selected ${state.progression[i].name}`);
+        }
+      });
+    });
+  }
+
+  // add chord
+  el.btnAdd.addEventListener('click', ()=>{
+    const root = el.rootNote.value;
+    const type = el.chordType.value;
+    const notes = chordNotes(root, type);
+    state.progression.push({name:`${root} ${type}`, root, type, notes});
+    refreshProgression();
+    showStatus(`Added ${root} ${type}`);
+    debugLog(`Added chord: ${root} ${type}`);
+  });
+
+  // import chords
+  function parseChord(str){
+    const m = String(str).trim().match(/^([A-G][#b]?)(.*)$/i);
+    if(!m) return null;
+    const rootRaw = m[1];
+    const root = (rootRaw.includes('b') ? flatToSharp(rootRaw) : rootRaw).replace('b','#').toUpperCase();
+    let t = (m[2]||'').trim().toLowerCase();
+    let type = 'major';
+    if(t==='m' || /^m(in)?/.test(t)) type='minor';
+    else if(/dim/.test(t)) type='diminished';
+    else if(/aug/.test(t)) type='augmented';
+    else if(/sus2/.test(t)) type='sus2';
+    else if(/sus4|sus$/.test(t)) type='sus4';
+    else if(/maj7|Δ7/.test(t)) type='major7';
+    else if(/m7|min7/.test(t)) type='minor7';
+    else if(/(^7$|dom7)/.test(t)) type='dominant7';
+    return {name:`${root} ${type}`, root, type, notes: chordNotes(root,type)};
+  }
+
+  function flatToSharp(f){
+    const map = {'Bb':'A#','Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#'};
+    const key = f.toUpperCase();
+    return map[key] || f;
+  }
+
+  el.btnImport.addEventListener('click', ()=>{
+    const txt = el.importInput.value;
+    if(!txt) return;
+    const parts = txt.split(',');
+    let added = 0;
+    parts.forEach(p=>{
+      const c = parseChord(p);
+      if(c){ state.progression.push(c); added++; }
+    });
+    refreshProgression();
+    el.importInput.value = '';
+    showStatus(`Imported ${added} chords`);
+    debugLog(`Imported ${added} chords: ${txt}`);
+  });
+
+  // --- playback schedulers
+  function beatsToSeconds(){
+    const beats = Number(el.beats.value);
+    const bpm = Number(el.bpm.value);
+    return (60 / bpm) * beats;
+  }
+  function beatsToMs(){ return beatsToSeconds() * 1000; }
+
+  function scheduleNext(){
+    clearTimeout(state.timer);
+    if(!state.isPlaying || state.isPaused) return;
+    if(state.idx >= state.progression.length){
+      if(el.loop.checked){
+        state.idx = 0;
+      } else {
+        stopProgression();
+        return;
+      }
+    }
+    const chord = state.progression[state.idx];
+    Array.from(el.progressionBar.querySelectorAll('.pill')).forEach(p=>p.classList.remove('playing'));
+    const pill = el.progressionBar.querySelector(`.pill[data-i="${state.idx}"]`);
+    if(pill) pill.classList.add('playing');
+    showStatus(`Playing ${chord.name} (${state.idx+1}/${state.progression.length})`);
+    highlightNotes(chord.notes);
+    const octaveBase = 4;
+    const withOct = chord.notes.map(n => n + octaveBase);
+    if(state.audioReady){
+      try {
+        // play all notes of the chord simultaneously
+        playChord(withOct, beatsToSeconds(), 0.5);
+      } catch(e){ 
+        debugError(`Error playing chord: ${e.message}`);
+        console.warn(e); 
+      }
+    }
+    state.idx++;
+    state.timer = setTimeout(scheduleNext, beatsToMs());
+  }
+
+  function startProgression(){
+    if(state.progression.length===0){ 
+      showStatus('Add chords first'); 
+      debugWarning("Cannot play progression: no chords added");
+      return; 
+    }
+    if(!state.audioReady){ 
+      state.pendingAction = startProgression; 
+      debugLog("Audio not ready, queuing progression start");
+      ensureAudio(); 
+      return; 
+    }
+    state.isPlaying = true; 
+    state.isPaused = false;
+    el.btnPlayStop.textContent = 'Stop Progression';
+    el.btnPause.disabled = false;
+    if(state.idx >= state.progression.length) state.idx = 0;
+    debugLog(`Starting progression with ${state.progression.length} chords`);
+    scheduleNext();
+  }
+  function stopProgression(){
+    state.isPlaying = false; 
+    state.isPaused = false;
+    state.idx = 0;
+    clearTimeout(state.timer);
+    el.btnPlayStop.textContent = 'Play Progression';
+    el.btnPause.disabled = true;
+    Array.from(el.progressionBar.querySelectorAll('.pill')).forEach(p=>p.classList.remove('playing'));
+    showStatus('');
+    clearHighlights();
+    debugLog("Progression stopped");
+  }
+  function pauseProgression(){
+    if(!state.isPlaying || state.isPaused) return;
+    state.isPaused = true;
+    clearTimeout(state.timer);
+    el.btnPause.textContent = 'Resume';
+    showStatus('Paused');
+    debugLog("Progression paused");
+  }
+  function resumeProgression(){
+    if(!state.isPlaying || !state.isPaused) return;
+    state.isPaused = false;
+    el.btnPause.textContent = 'Pause';
+    showStatus('Resumed');
+    debugLog("Progression resumed");
+    scheduleNext();
+  }
+
+  el.btnPlayStop.addEventListener('click', ()=>{
+    if(state.isPlaying) stopProgression();
+    else startProgression();
+  });
+  el.btnPause.addEventListener('click', ()=>{
+    if(state.isPaused) resumeProgression();
+    else pauseProgression();
+  });
+  el.btnClear.addEventListener('click', ()=>{
+    stopProgression();
+    state.progression = [];
+    refreshProgression();
+    debugLog("Cleared all chords");
+  });
+
+  // --- scales
+  const SCALES = {
+    major:[0,2,4,5,7,9,11],
+    natural_minor:[0,2,3,5,7,8,10],
+    pentatonic_major:[0,2,4,7,9],
+    pentatonic_minor:[0,3,5,7,10]
+  };
+  function scaleNotes(root, type){
+    const ri = idxOf(root);
+    if(ri < 0) return [];
+    const f = SCALES[type] || SCALES['major'];
+    return f.map(semi => NOTE_NAMES[(ri + semi) % 12]);
+  }
+
+  el.btnPlayScale.addEventListener('click', async ()=>{
+    const root = el.scaleRoot.value;
+    const type = el.scaleType.value;
+    const notes = scaleNotes(root, type);
+    highlightNotes(notes);
+    if(!state.audioReady){
+      state.pendingAction = ()=> playScale(notes);
+      debugLog("Audio not ready, queuing scale playback");
+      await ensureAudio();
+      return;
+    }
+    playScale(notes);
+  });
+
+  function playScale(notes){
+    debugLog(`Playing scale: ${notes.join(', ')}`);
+    const octaveBase = 4;
+    let idx = 0;
+    const playNext = () => {
+      if(idx >= notes.length) return;
+      const note = notes[idx] + octaveBase;
+      playNote(note, 0.4, 0.6);
+      idx++;
+      setTimeout(playNext, 300);
+    };
+    playNext();
+  }
+
+  // --- UI setup
+  function init(){
+    buildPiano();
+    refreshProgression();
+    // tab switching
+    el.tabs.forEach(t=>{
+      t.addEventListener('click', (ev)=>{
+        const tab = ev.currentTarget;
+        const tabName = tab.dataset.tab;
+        el.tabs.forEach(t=>t.classList.remove('active'));
+        tab.classList.add('active');
+        el.tabChords.classList.toggle('active', tabName==='chords');
+        el.tabScales.classList.toggle('active', tabName==='scales');
+      });
+    });
+    // sliders
+    el.bpm.addEventListener('input', ()=>{
+      el.bpmLabel.textContent = el.bpm.value;
+    });
+    el.beats.addEventListener('input', ()=>{
+      el.beatsLabel.textContent = el.beats.value;
+    });
+    // window resize
+    window.addEventListener('resize', ()=>{
+      requestAnimationFrame(()=>positionBlackKeys());
+    });
+    
+    debugLog("Piano visualizer initialized");
+    showStatus('Ready — add chords or play the piano');
+  }
+
+  // Start the app
+  init();
+})();
+</script>
+</body>
+</html>
