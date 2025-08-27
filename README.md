@@ -25,7 +25,7 @@ An interactive web application that helps musicians and students visualize and u
 
 This project is maintained and developed in my free time. If you find it useful, please consider supporting its development.
 
-[![Donate](https://paypal.me/jessecotto)
+[![Donate](https://paypal.me/jessecotto)]
 
 Your contribution helps keeping improvements on the tool free and accessible
 
